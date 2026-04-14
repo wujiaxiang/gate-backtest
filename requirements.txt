@@ -1,0 +1,24 @@
+# Gate-Backtest 依赖
+
+# 核心依赖
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# 量化回测
+backtrader>=1.9.0
+
+# 交易所API
+ccxt>=4.0.0
+
+# 技术指标 (可选)
+ta-lib>=0.4.28
+# 如 ta-lib 安装失败，可使用:
+# pip install pandas-ta
+
+# 开发工具
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
