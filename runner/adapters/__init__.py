@@ -1,7 +1,10 @@
 """
-适配器模块 - 桥接 GateStrategy 与 backtrader
+适配器层
+========
+提供 Backtrader 适配器，将 Backtrader 接口转换为 Gate 风格
 """
 
-from .gatestrategy_adapter import GateStrategyAdapter, GateData
+from .backtrader_adapter import BacktraderAdapter, create_engine
+from .gate_adapter import GateAdapter
 
-__all__ = ["GateStrategyAdapter", "GateData"]
+__all__ = ['BacktraderAdapter', 'create_engine', 'GateAdapter']

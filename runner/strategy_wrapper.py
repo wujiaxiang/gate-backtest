@@ -1,178 +1,28 @@
 """
-用户策略 - 马丁格尔加仓策略
-===========================
-继承 Backtrader 风格，同时提供 Gate 风格接口
+策略包装器
+==========
+将 UserStrategy 包装为 Backtrader Strategy:
 
-架构:
-    GateStrategy (基类)
-        - 提供 Gate 风格接口
-        - get_klines_func()
-        - sell_func()
-        - close_func()
-        - position
-
-    UserStrategy (具体策略)
-        - 继承 GateStrategy
-        - 实现 next_gate() 方法
+    - 桥接 Backtrader 的 next 调用到用户策略的逻辑
+    - 统计交易盈亏与胜负
+    - 记录权益曲线
 """
 
 import backtrader as bt
-import numpy as np
 import pandas as pd
+import numpy as np
 import talib
+from typing import Optional
 
 
-class GateStrategy(bt.Strategy):
+class UserStrategyWrapper(bt.Strategy):
     """
-    Gate.io 风格策略基类
+    用户策略包装器 - 马丁格尔加仓策略
 
-    提供 Gate 风格接口:
-        - self.get_klines(limit, as_df) -> DataFrame
-        - self.sell(size) -> Order
-        - self.close() -> Order
-        - self.position -> Position
-
-    子类只需实现 next_gate() 方法
-    """
-
-    def __init__(self):
-        super().__init__()
-
-        # 状态变量
-        self._klines_cache = []
-        self._equity_curve = []
-        self._order = None
-
-    def get_klines(self, limit: int = 50, as_df: bool = True):
-        """
-        获取 K线数据（Gate 风格）
-
-        Args:
-            limit: 获取最近 limit 根 K线
-            as_df: 是否返回 DataFrame
-
-        Returns:
-            DataFrame 或 list
-        """
-        # 获取当前索引
-        idx = len(self)
-
-        # 确保有足够的数据
-        lookback = min(limit + 1, idx)
-
-        klines = []
-        for i in range(idx - lookback + 1, idx + 1):
-            try:
-                dt = self.data.datetime[i]
-                o = self.data.open[i]
-                h = self.data.high[i]
-                l = self.data.low[i]
-                c = self.data.close[i]
-                v = self.data.volume[i]
-
-                if c != c:  # NaN check
-                    continue
-
-                klines.append({
-                    'time': int(dt),
-                    'o': float(o) if o == o else 0,
-                    'h': float(h) if h == h else 0,
-                    'l': float(l) if l == l else 0,
-                    'c': float(c),
-                    'v': float(v) if v == v else 0,
-                })
-            except Exception:
-                break
-
-        if as_df:
-            if not klines:
-                return pd.DataFrame()
-            df = pd.DataFrame(klines)
-            df.columns = ['time', 'open', 'high', 'low', 'close', 'volume']
-            return df
-
-        return klines
-
-    def sell_order(self, size: float = None):
-        """开仓函数（Gate 风格）"""
-        if self._order:
-            return self._order
-
-        if size is None or size <= 0:
-            # 计算默认数量
-            cash = self.broker.getcash()
-            price = self.data.close[0]
-            leverage = getattr(self.params, 'leverage', 50)
-            size = cash * leverage * 0.98 / price  # 留点余量
-
-        self._order = self.sell(size=size)
-        return self._order
-
-    def close_position(self):
-        """平仓函数（Gate 风格）"""
-        if self._order:
-            return self._order
-        self._order = self.close()
-        return self._order
-
-    @property
-    def position_obj(self):
-        """持仓对象（Gate 风格）"""
-        return self.position
-
-    def next(self):
-        """Backtrader 主循环"""
-        # 记录权益
-        value = self.broker.getvalue()
-        self._equity_curve.append({
-            'time': self.data.datetime.date(0),
-            'close': self.data.close[0],
-            'fund': value,
-        })
-
-        # 调用 Gate 风格逻辑
-        try:
-            self.next_gate(
-                get_klines_func=self.get_klines,
-                sell_func=self.sell_order,
-                close_func=self.close_position,
-                position=self.position_obj
-            )
-        except Exception as e:
-            pass
-
-    def notify_order(self, order):
-        """订单通知"""
-        if order.status in [order.Submitted, order.Accepted]:
-            return
-
-        if order.status == order.Completed:
-            pass  # 可添加日志
-
-        self._order = None
-
-    def next_gate(self, get_klines_func, sell_func, close_func, position):
-        """
-        Gate 风格策略逻辑（由子类实现）
-
-        Args:
-            get_klines_func: 获取K线数据的函数
-            sell_func: 开仓函数
-            close_func: 平仓函数
-            position: 当前持仓对象
-        """
-        raise NotImplementedError("Subclass must implement next_gate()")
-
-
-class UserStrategy(GateStrategy):
-    """
-    马丁格尔加仓量化策略
-
-    特性:
-    - 马丁格尔加仓: 基于亏损比例的多阶梯加仓
-    - 动态止盈止损: 根据市场波动调整阈值
-    - 利润复投: 30%盈利自动滚入投资本金
-    - 动态参数: 基于RSI和ATR调整策略参数
+    负责:
+        - 桥接 next() 到马丁格尔逻辑
+        - 统计每笔交易盈亏
+        - 记录权益曲线
     """
 
     params = dict(
@@ -217,11 +67,16 @@ class UserStrategy(GateStrategy):
 
         # 利润复投比例
         compounding_ratio=0.3,
+
+        # 方向
+        direction='short',
+
+        # 市场信息
+        market='ETH_USDT',
+        interval='1d',
     )
 
     def __init__(self):
-        super().__init__()
-
         # 构建马丁格尔阶梯
         raw_thresholds = [
             self.params.ladder_threshold_0,
@@ -257,12 +112,72 @@ class UserStrategy(GateStrategy):
         # 保证金比例
         self.margin_ratio_mult = 0.5
 
+        # 交易统计
+        self.trade_count = 0
+        self.win_count = 0
+        self.loss_count = 0
+        self.trade_pnls = []
+
+        # 权益曲线
+        self._equity_curve = []
+
+        # 初始资金
+        self.broker_start_value = None
+
+        # 当前订单
+        self._current_order = None
+
+    def start(self):
+        """策略开始，记录初始资金"""
+        self.broker_start_value = self.broker.getvalue()
+
+    def get_klines(self, limit: int = 50, as_df: bool = True):
+        """
+        获取 K线数据
+
+        Args:
+            limit: 获取最近 limit 根 K线
+            as_df: 是否返回 DataFrame
+
+        Returns:
+            DataFrame 或 list
+        """
+        idx = len(self)
+        if idx <= 0:
+            return None
+
+        use = min(limit + 1, idx)
+        rows = []
+        for i in range(idx - use + 1, idx + 1):
+            try:
+                dt = self.data.datetime[i]
+                if dt != dt:  # NaN check
+                    continue
+                rows.append({
+                    'time': int(dt),
+                    'open': float(self.data.open[i]),
+                    'high': float(self.data.high[i]),
+                    'low': float(self.data.low[i]),
+                    'close': float(self.data.close[i]),
+                    'volume': float(self.data.volume[i]) if hasattr(self.data, 'volume') else 0.0,
+                })
+            except Exception:
+                continue
+
+        if not rows:
+            return None
+
+        if as_df:
+            df = pd.DataFrame(rows)
+            df.columns = ['time', 'open', 'high', 'low', 'close', 'volume']
+            return df
+        return rows
+
     def calculate_dynamic_coef(self, rsi_val: float, atr_val: float, price: float) -> float:
         """计算动态系数"""
         trend_factor = max(0.0, min(1.0, (rsi_val - 30.0) / 40.0))
         atr_pct = atr_val / price if price > 0 else 0.01
         vol_factor = min(1.0, atr_pct * 10)
-
         combined = (trend_factor + vol_factor) / 2
         coef = self.params.coef_min + combined * (self.params.coef_max - self.params.coef_min)
         return max(self.params.coef_min, min(self.params.coef_max, coef))
@@ -305,12 +220,32 @@ class UserStrategy(GateStrategy):
         self.base_quantity = 0.0
         self.margin_ratio_mult = 0.5
 
-    def next_gate(self, get_klines_func, sell_func, close_func, position):
-        """Gate 风格策略逻辑"""
-        if self._order:
+    def next(self):
+        """Backtrader 主循环"""
+        # 跳过待处理订单
+        if self._current_order and not self._current_order.status == self._current_order.Completed:
             return
 
-        df = get_klines_func(limit=50, as_df=True)
+        # 跳过无效价格
+        try:
+            price = self.data.close[0]
+            if price != price:  # NaN check
+                return
+        except Exception:
+            return
+
+        # 记录权益曲线
+        value = self.broker.getvalue()
+        dt = bt.num2date(self.data.datetime[0])
+        self._equity_curve.append({
+            'time': dt,
+            'close': price,
+            'fund': value,
+            'position_size': self.position.size,
+        })
+
+        # 获取 K线数据
+        df = self.get_klines(limit=50, as_df=True)
         if df is None or df.empty or len(df) < self.params.rsi_period + 5:
             return
 
@@ -336,7 +271,7 @@ class UserStrategy(GateStrategy):
         dyn_coef = self.calculate_dynamic_coef(rsi_val, atr_val, price)
 
         # 检查持仓状态
-        has_position = position.size != 0 if position else False
+        has_position = self.position.size != 0
 
         if not has_position:
             # 开仓
@@ -348,7 +283,7 @@ class UserStrategy(GateStrategy):
             self.current_ladder_step = 0
             self.margin_ratio_mult = 0.5
 
-            self._order = sell_func(size=self.base_quantity)
+            self._current_order = self.sell(size=self.base_quantity)
             return
 
         # 持仓管理
@@ -358,14 +293,14 @@ class UserStrategy(GateStrategy):
         target_tp = self.calculate_tp_by_step(self.current_ladder_step)
         if pnl_ratio >= target_tp:
             self.calculate_and_compound_pnl(price)
-            self._order = close_func()
+            self._current_order = self.close()
             self.reset_position()
             return
 
         # 止损
         if pnl_ratio <= -self.params.stop_loss:
             self.calculate_and_compound_pnl(price)
-            self._order = close_func()
+            self._current_order = self.close()
             self.reset_position()
             return
 
@@ -383,8 +318,35 @@ class UserStrategy(GateStrategy):
                     self.current_ladder_step = next_step
                     self.margin_ratio_mult = (self.total_quantity * price) / (2 * self.current_investment)
 
-                    self._order = sell_func(size=new_quantity)
+                    self._current_order = self.sell(size=new_quantity)
+
+    def notify_order(self, order):
+        """订单通知"""
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+
+        if order.status == order.Completed:
+            self._current_order = None
+
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            self._current_order = None
+
+    def notify_trade(self, trade):
+        """交易完成回调：统计每笔盈亏与胜负"""
+        if trade.isclosed:
+            pnl = trade.pnlcomm
+            self.trade_pnls.append(pnl)
+            self.trade_count += 1
+
+            if pnl > 0:
+                self.win_count += 1
+            elif pnl < 0:
+                self.loss_count += 1
 
     def get_equity_curve(self):
         """获取权益曲线"""
         return self._equity_curve
+
+    def stop(self):
+        """策略结束"""
+        pass
