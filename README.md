@@ -341,7 +341,7 @@ class UserStrategy:
 
 ```bash
 # 运行 RSI 示例
-python3 scripts/backtest.py \
+python3 scripts/run.py \
     --strategy examples/01_simple_rsi.py \
     --from 2025-01-01 \
     --to 2026-04-15 \
@@ -365,17 +365,7 @@ python3 scripts/backtest.py \
 Gate.io 提供完整的历史K线批量下载服务，覆盖从 **2023年1月起** 的所有历史数据:
 
 ```bash
-# backtrader 版本
-python scripts/run_backtest.py \
-    --exchange gate_history \
-    --symbol ETH/USDT \
-    --interval 1d \
-    --from 2023-01-01 \
-    --to 2025-12-31 \
-    --save-data
-
-# 轻量版
-python scripts/backtest.py \
+python scripts/run.py \
     --datasource gate_history \
     --market ETH_USDT \
     --interval 1d \
@@ -402,14 +392,14 @@ timestamp,o,h,l,c,v
 
 **本地文件加载:** 下载后的 `.csv.gz` 文件可直接使用:
 ```bash
-python scripts/run_backtest.py --data-file data/gate_history/futures_usdt/candlesticks_1d/202301/ETH_USDT-202301.csv.gz
+python scripts/run.py --data-file data/gate_history/futures_usdt/candlesticks_1d/202301/ETH_USDT-202301.csv.gz
 ```
 
 ## 开发
 
 ```bash
 # 运行测试
-pytest tests/
+python -m pytest unittest/ -v
 
 # 代码格式化
 black gate_backtest/
@@ -431,7 +421,7 @@ flake8 gate_backtest/
    - 如需扩展功能，应在框架层实现，插件层无感知
 
 2. **框架修改必须通过单元测试验证**
-   - 每次修改 `scripts/backtest.py` 或 `runner/` 下的框架代码后
+   - 每次修改 `scripts/run.py` 或 `runner/` 下的框架代码后
    - 必须运行 `unittest/` 目录下的单元测试确保功能正常
    - 测试通过后方可进行全量回测
 
@@ -443,7 +433,7 @@ cd gate-backtest
 python -m pytest unittest/ -v
 
 # 2. 确认测试全部通过后，再进行全量回测
-python scripts/backtest.py --datasource gate_history ...
+python scripts/run.py --datasource gate_history ...
 ```
 
 ### 性能优化原则
