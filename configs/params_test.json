@@ -8,7 +8,6 @@
   "take_profit": 0.25,
   "stop_loss": 0.25,
   "direction": "short",
-
   "ladder_threshold_0": 0.0,
   "ladder_mult_0": 1,
   "ladder_threshold_1": 0.7,
@@ -25,7 +24,6 @@
   "ladder_mult_6": 64,
   "ladder_threshold_7": 1.8,
   "ladder_mult_7": 128,
-
   "coef_min": 1.0,
   "coef_max": 2.0,
   "tp_min": 0.005,
@@ -33,7 +31,6 @@
   "rsi_period": 14,
   "atr_period": 14,
   "compounding_ratio": 0.3,
-
   "backtest_from": "2025-01-01",
-  "backtest_to": "2026-04-15"
+  "backtest_to": "2025-01-03"
 }

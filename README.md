@@ -40,11 +40,11 @@ pip install TA-Lib
 
 ```bash
 # 使用默认配置运行
-python scripts/run_backtest.py --config configs/params.json
+python scripts/run.py --config configs/params.json
 
 # 自定义参数运行
-python scripts/run_backtest.py \
-    --symbol ETH/USDT \
+python scripts/run.py \
+    --market ETH_USDT \
     --interval 1d \
     --from 2025-01-01 \
     --to 2026-04-15 \
@@ -52,13 +52,16 @@ python scripts/run_backtest.py \
     --leverage 50
 
 # 保存数据到本地
-python scripts/run_backtest.py --save-data --exchange gate
+python scripts/run.py --save-data --datasource gate
 
 # 使用本地数据
-python scripts/run_backtest.py --data-file data/ETH_USDT_1d.csv
+python scripts/run.py --data-file data/ETH_USDT_1d.csv
 
-# 生成回测图表
-python scripts/run_backtest.py --plot
+# 禁用并行回测（串行模式）
+python scripts/run.py --no-parallel --market ETH_USDT
+
+# 指定并行worker数量
+python scripts/run.py --workers 4 --market ETH_USDT
 ```
 
 ### Python API
@@ -95,14 +98,14 @@ engine.print_report(result)
 运行回测后，可使用内置的HTML可视化工具查看交互式报告：
 
 ```bash
-# 运行回测
-python scripts/backtest.py \
+# 运行回测（自动并行优化）
+python scripts/run.py \
     --datasource gate_history \
     --market ETH_USDT \
-    --interval 1d \
-    --from 2023-01-01 \
-    --to 2025-12-31 \
-    --investment 1000 \
+    --interval 1m \
+    --from 2025-01-01 \
+    --to 2026-04-15 \
+    --investment 200 \
     --leverage 50
 
 # 查看HTML报告
@@ -243,8 +246,7 @@ gate-backtest/
 │   ├── backtest/            # 回测引擎
 │   └── utils/               # 工具函数
 ├── scripts/                 # 回测脚本
-│   ├── backtest.py          # 轻量版 (Gate 官方风格)
-│   ├── run_backtest.py      # backtrader 版本
+│   ├── run.py               # 主入口 (合并版，支持并行)
 │   └── export_results.py    # CSV转JSON导出工具
 ├── html/                    # HTML可视化报告（用户可自定义）
 │   └── backtest_report.html # 报告模板
