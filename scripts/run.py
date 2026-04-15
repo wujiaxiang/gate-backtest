@@ -527,7 +527,7 @@ def run_parallel(klines: pd.DataFrame, StrategyCls, params: Dict[str, Any],
 # 结果导出
 # ============================================================
 
-def export_results(dated_dir: str, klines: pd.DataFrame, equity: List[Dict]):
+def export_results(dated_dir: str, klines: pd.DataFrame, equity: List[Dict], params: Dict = None):
     """导出回测结果"""
     print(f"[INFO] 结果目录: {dated_dir}")
     
@@ -561,23 +561,25 @@ def export_results(dated_dir: str, klines: pd.DataFrame, equity: List[Dict]):
     print(f"[EXPORT] klines.csv -> {klines_path}")
     
     # 生成JSON结果
-    try:
-        sys.path.insert(0, os.path.dirname(__file__))
-        from export_results import load_equity_data, load_klines_data, generate_json_result, save_json_result
-        
-        eq_df = load_equity_data(eq_path)
-        kl_df = load_klines_data(klines_path)
-        json_result = generate_json_result(eq_df, kl_df, params)
-        
-        json_path = os.path.join(dated_dir, 'backtest_result.json')
-        save_json_result(json_result, json_path)
-        
-        # 提示HTML报告
-        html_path = os.path.join(os.path.dirname(dated_dir), 'html', 'backtest_report.html')
-        print(f"\n[INFO] HTML可视化报告: open {html_path}")
-        print(f"[INFO] 选择 {json_path} 查看")
-    except Exception as e:
-        print(f"[WARN] 生成JSON结果失败: {e}")
+    if params:
+        try:
+            sys.path.insert(0, os.path.dirname(__file__))
+            from export_results import load_equity_data, load_klines_data, generate_json_result, save_json_result
+            
+            eq_df = load_equity_data(eq_path)
+            kl_df = load_klines_data(klines_path)
+            json_result = generate_json_result(eq_df, kl_df, params)
+            
+            json_path = os.path.join(dated_dir, 'backtest_result.json')
+            save_json_result(json_result, json_path)
+            print(f"[EXPORT] backtest_result.json -> {json_path}")
+            
+            # 提示HTML报告
+            html_path = os.path.join(os.path.dirname(dated_dir), 'html', 'backtest_report.html')
+            print(f"\n[INFO] HTML可视化报告: open {html_path}")
+            print(f"[INFO] 选择 {json_path} 查看")
+        except Exception as e:
+            print(f"[WARN] 生成JSON结果失败: {e}")
 
 
 # ============================================================
@@ -709,7 +711,7 @@ def main():
             equity = engine.equity_curve
         
         # 导出结果
-        export_results(dated_dir, df, equity)
+        export_results(dated_dir, df, equity, params)
         
         print("\n[完成] 回测完成!")
 
