@@ -90,6 +90,148 @@ result = engine.run(data)
 engine.print_report(result)
 ```
 
+## HTML可视化报告
+
+运行回测后，可使用内置的HTML可视化工具查看交互式报告：
+
+```bash
+# 运行回测
+python scripts/backtest.py \
+    --datasource gate_history \
+    --market ETH_USDT \
+    --interval 1d \
+    --from 2023-01-01 \
+    --to 2025-12-31 \
+    --investment 1000 \
+    --leverage 50
+
+# 查看HTML报告
+# 1. 直接在浏览器中打开
+open html/backtest_report.html
+
+# 2. 或者启动本地服务器（支持跨域）
+cd html && python -m http.server 8080
+# 访问 http://localhost:8080/backtest_report.html
+```
+
+### 查看报告
+
+1. 打开 `html/backtest_report.html`
+2. 点击页面顶部的「选择回测结果 JSON 文件」按钮
+3. 选择 `results/时间戳/backtest_result.json`
+4. 即可查看可视化图表
+
+**支持拖拽**：直接将 JSON 文件拖入页面即可加载
+
+### 报告功能特性
+
+1. **关键指标仪表板**：总收益率、年化收益率、最大回撤、夏普比率等
+2. **价格与累计收益率对照图**：ETH价格走势与累计收益双Y轴图表
+3. **日收益率与收益金额图**：柱状图+折线图组合
+4. **日收益率分布直方图**：展示日收益率的分布情况
+
+### HTML报告可自定义
+
+`html/backtest_report.html` 是纯静态文件，由用户自行迭代修改：
+- 修改样式（颜色、布局等）
+- 添加新图表
+- 调整指标展示
+- 自定义交互功能
+
+---
+
+## 临时文件目录说明
+
+| 目录 | 说明 | Git忽略 |
+|------|------|--------|
+| `results/` | 回测结果，每次运行生成一个时间戳子目录 | ✅ |
+| `data/` | K线数据缓存，从Gate下载的CSV文件 | ✅ |
+| `logs/` | 运行时日志，`backtest_latest.log` | ✅ |
+| `html/` | HTML可视化报告模板 | ❌ (git跟踪) |
+
+### results/ 目录结构
+
+```
+results/
+└── 20260415_120000/           # 时间戳目录
+    ├── backtest_result.json   # 回测汇总数据（用于HTML报告）
+    ├── equity.csv             # 每日资产数据
+    ├── klines.csv             # K线数据
+    ├── daily_equity.csv       # 按日汇总的资产数据
+    └── backtest.log           # 完整日志
+```
+
+### HTML报告 JSON 数据规范
+
+`backtest_result.json` 结构如下：
+
+```json
+{
+  "metadata": {
+    "generated_at": "2026-04-15T12:00:00",
+    "version": "1.0",
+    "source": "gate-backtest"
+  },
+  "backtest_params": {
+    "market": "ETH_USDT",
+    "interval": "1d",
+    "backtest_from": "2025-01-01",
+    "backtest_to": "2026-04-15",
+    "investment": 200,
+    "leverage": 50,
+    "direction": "short",
+    "data_source": "gate_history",
+    "commission": 0.0005
+  },
+  "key_metrics": {
+    "total_return_pct": 148.28,
+    "annual_return_pct": 57.57,
+    "max_drawdown_pct": 65.16,
+    "sharpe_ratio": 10.42,
+    "volatility_pct": 56.75,
+    "win_rate_pct": 57.53,
+    "initial_price": 1191.00,
+    "final_price": 2957.00
+  },
+  "data_series": {
+    "equity": [
+      {"time": "2025-01-01T00:00:00", "price": 1191.0, "fund": 200.0, "position_size": 0},
+      {"time": "2025-01-02T00:00:00", "price": 1210.5, "fund": 198.5, "position_size": -0.5},
+      ...
+    ],
+    "trades": [
+      {"entry_time": "...", "exit_time": "...", "pnl": 0.015, ...}
+    ],
+    "sample_size": 1096
+  },
+  "performance_summary": {
+    "total_days": 470,
+    "data_points": 1096,
+    "execution_time": 120
+  }
+}
+```
+
+### JSON 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `backtest_params` | object | 回测参数配置 |
+| `key_metrics` | object | 关键指标 |
+| `key_metrics.total_return_pct` | float | 总收益率(%) |
+| `key_metrics.annual_return_pct` | float | 年化收益率(%) |
+| `key_metrics.max_drawdown_pct` | float | 最大回撤(%) |
+| `key_metrics.sharpe_ratio` | float | 夏普比率 |
+| `key_metrics.volatility_pct` | float | 波动率(%) |
+| `key_metrics.win_rate_pct` | float | 胜率(%) |
+| `key_metrics.initial_price` | float | 初始价格 |
+| `key_metrics.final_price` | float | 最终价格 |
+| `data_series.equity` | array | 每日资产序列 |
+| `data_series.equity[].time` | string | 时间戳 |
+| `data_series.equity[].price` | float | ETH价格 |
+| `data_series.equity[].fund` | float | 账户资金 |
+| `data_series.equity[].position_size` | float | 持仓数量(负=做空) |
+
 ## 项目结构
 
 ```
@@ -102,7 +244,10 @@ gate-backtest/
 │   └── utils/               # 工具函数
 ├── scripts/                 # 回测脚本
 │   ├── backtest.py          # 轻量版 (Gate 官方风格)
-│   └── run_backtest.py      # backtrader 版本
+│   ├── run_backtest.py      # backtrader 版本
+│   └── export_results.py    # CSV转JSON导出工具
+├── html/                    # HTML可视化报告（用户可自定义）
+│   └── backtest_report.html # 报告模板
 ├── examples/                # 策略示例 ⭐
 │   ├── 01_simple_rsi.py     # 简单 RSI 策略
 │   ├── 02_ma_cross.py       # 均线交叉策略
@@ -112,6 +257,9 @@ gate-backtest/
 ├── docs/                    # 文档
 │   └── USER_STRATEGY_TUTORIAL.md  # 策略编写教程 ⭐
 ├── configs/                 # 配置文件
+├── data/                    # K线数据缓存（git忽略）
+├── results/                 # 回测结果（git忽略）
+├── logs/                    # 运行时日志（git忽略）
 ├── requirements.txt
 └── README.md
 ```
@@ -202,12 +350,58 @@ python3 scripts/backtest.py \
 
 ## 交易所支持
 
-| 交易所 | 代码 | 类型 |
-|--------|------|------|
-| Gate.io | `gate` | 永续合约 |
-| 币安 | `binance` | 现货/合约 |
-| OKX | `okx` | 永续合约 |
-| Hyperliquid | `hyperliquid` | 永续合约 |
+| 交易所 | 代码 | 类型 | 说明 |
+|--------|------|------|------|
+| Gate.io | `gate` | 永续合约 | ccxt 实时拉取 (有 API 限制) |
+| Gate.io 历史 | `gate_history` | 批量历史数据 | download.gatedata.org 批量下载 |
+| 币安 | `binance` | 现货/合约 | ccxt 实时拉取 |
+| OKX | `okx` | 永续合约 | ccxt 实时拉取 |
+| Hyperliquid | `hyperliquid` | 永续合约 | ccxt 实时拉取 |
+
+### Gate.io 历史批量数据 (推荐)
+
+Gate.io 提供完整的历史K线批量下载服务，覆盖从 **2023年1月起** 的所有历史数据:
+
+```bash
+# backtrader 版本
+python scripts/run_backtest.py \
+    --exchange gate_history \
+    --symbol ETH/USDT \
+    --interval 1d \
+    --from 2023-01-01 \
+    --to 2025-12-31 \
+    --save-data
+
+# 轻量版
+python scripts/backtest.py \
+    --datasource gate_history \
+    --market ETH_USDT \
+    --interval 1d \
+    --from 2023-01-01 \
+    --to 2025-12-31
+```
+
+**支持的数据类型:**
+
+| biz 参数 | 含义 | 数据来源 |
+|---------|------|---------|
+| `spot` | 现货 & 杠杆 | download.gatedata.org/spot/ |
+| `futures_usdt` (默认) | USDT 本位合约 | download.gatedata.org/futures_usdt/ |
+| `futures_btc` | BTC 本位合约 | download.gatedata.org/futures_btc/ |
+
+**支持的时间周期:** `1m`, `5m`, `1h`, `4h`, `1d`, `7d`
+
+**数据格式:**
+```csv
+timestamp,o,h,l,c,v
+2023-01-01 00:00:00+00:00,1550.5,1560.2,1548.3,1555.8,12345.67
+...
+```
+
+**本地文件加载:** 下载后的 `.csv.gz` 文件可直接使用:
+```bash
+python scripts/run_backtest.py --data-file data/gate_history/futures_usdt/candlesticks_1d/202301/ETH_USDT-202301.csv.gz
+```
 
 ## 开发
 
@@ -223,6 +417,47 @@ mypy gate_backtest/
 
 # 代码检查
 flake8 gate_backtest/
+```
+
+## 开发规范
+
+### 核心原则
+
+1. **插件接口规范不可修改**
+   - `UserStrategy` 类的 `__init__`、`next` 方法签名和参数约定为公开接口
+   - 策略调用方式（如 `get_klines_func`、`sell_func`、`close_func`）为稳定契约
+   - 如需扩展功能，应在框架层实现，插件层无感知
+
+2. **框架修改必须通过单元测试验证**
+   - 每次修改 `scripts/backtest.py` 或 `runner/` 下的框架代码后
+   - 必须运行 `unittest/` 目录下的单元测试确保功能正常
+   - 测试通过后方可进行全量回测
+
+### 测试流程
+
+```bash
+# 1. 修改框架代码后，运行单元测试
+cd gate-backtest
+python -m pytest unittest/ -v
+
+# 2. 确认测试全部通过后，再进行全量回测
+python scripts/backtest.py --datasource gate_history ...
+```
+
+### 性能优化原则
+
+- **预计算优先**: 技术指标（RSI、ATR等）在回测开始前一次性计算
+- **代理模式**: 使用 `TalibProxy` 拦截talib调用，策略代码无需修改
+- **向量化计算**: 优先使用pandas/numpy批量计算，避免逐行循环
+
+### 单元测试结构
+
+```
+unittest/
+├── helpers.py       # 测试辅助函数和数据生成
+├── test_engine.py   # 引擎核心功能测试
+├── test_export.py   # 数据导出功能测试
+└── test_data/       # 测试用小数据集
 ```
 
 ## 风险提示

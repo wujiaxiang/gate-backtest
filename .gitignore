@@ -39,11 +39,14 @@ ENV/
 htmlcov/
 .tox/
 
-# Data
-data/*.csv
-data/*.pkl
-results/*.csv
-results/*.png
+# Data (本地缓存数据)
+data/
+
+# Backtest Results (回测结果)
+results/
+
+# Logs (运行时日志)
+logs/
 
 # Logs
 *.log
