@@ -1,0 +1,67 @@
+{
+  "metadata": {
+    "generated_at": "2026-04-15T19:58:21.959508",
+    "version": "1.0",
+    "source": "gate-backtest-test"
+  },
+  "backtest_params": {
+    "market": "TEST_USDT",
+    "interval": "1m",
+    "backtest_from": "2025-01-01",
+    "backtest_to": "2025-01-02",
+    "investment": 1000.0,
+    "leverage": 2,
+    "direction": "long",
+    "data_source": "test",
+    "commission": 0.0002
+  },
+  "key_metrics": {
+    "price_change_pct": 10.0,
+    "return_pct": 20.0,
+    "return_amount": 200.0,
+    "final_capital": 1200.0,
+    "max_drawdown_pct": 3.81,
+    "volatility_pct": 78.24,
+    "sharpe_ratio": 0.05,
+    "win_rate_pct": 80.0,
+    "leverage": 2,
+    "direction": "long",
+    "initial_capital": 1000
+  },
+  "data_series": {
+    "equity": [
+      {
+        "time": "2025-01-01T00:00:00+00:00",
+        "price": 100,
+        "position": 0.1
+      },
+      {
+        "time": "2025-01-01T00:01:00+00:00",
+        "price": 102,
+        "position": 0.1
+      },
+      {
+        "time": "2025-01-01T00:02:00+00:00",
+        "price": 105,
+        "position": 0.1
+      },
+      {
+        "time": "2025-01-01T00:03:00+00:00",
+        "price": 103,
+        "position": 0.1
+      },
+      {
+        "time": "2025-01-01T00:04:00+00:00",
+        "price": 108,
+        "position": 0.1
+      },
+      {
+        "time": "2025-01-01T00:05:00+00:00",
+        "price": 110,
+        "position": 0.1
+      }
+    ],
+    "trades": [],
+    "sample_size": 6
+  }
+}

@@ -6,11 +6,16 @@
     <title>回测报告</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
         .file-selector { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 30px; border: 1px solid #334155; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
         .file-selector label { font-weight: 600; color: #e2e8f0; }
         .file-selector input[type="file"] { flex: 1; min-width: 200px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; color: #f8fafc; }
         .file-selector .hint { font-size: 12px; color: #64748b; width: 100%; }
+        .info-bar { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; display: flex; gap: 24px; font-size: 13px; }
+        .info-item { display: flex; gap: 8px; }
+        .info-label { color: #64748b; }
+        .info-value { color: #10b981; font-weight: 600; }
         .header { text-align: center; margin-bottom: 30px; padding: 20px 0; border-bottom: 1px solid #334155; }
         .header h1 { margin: 0 0 10px 0; color: #60a5fa; }
         .header p { margin: 0; color: #94a3b8; }
@@ -32,19 +37,14 @@
         .loading-text { color: #94a3b8; font-size: 14px; }
         .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
-        .data-info { background: #1e293b; border-radius: 8px; padding: 12px 16px; margin-top: 15px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #64748b; }
         .error-box { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 8px; padding: 20px; text-align: center; color: #ef4444; }
-        .error-box small { color: #94a3b8; display: block; margin-top: 10px; }
-        .current-file { font-size: 12px; color: #64748b; margin-left: auto; }
-        .current-file strong { color: #60a5fa; }
     </style>
 </head>
 <body>
     <div class="file-selector">
         <label for="jsonFile">选择回测结果 JSON 文件:</label>
         <input type="file" id="jsonFile" accept=".json">
-        <span class="current-file" id="currentFile">未选择文件</span>
-        <div class="hint">支持拖拽文件到此处，或点击选择 result 目录下的 backtest_result.json 文件</div>
+        <div class="hint">拖拽文件到此处，或点击选择</div>
     </div>
     
     <div id="loading" class="loading">
@@ -53,6 +53,13 @@
     </div>
     
     <div id="content" style="display: none;">
+        <!-- 信息栏 -->
+        <div class="info-bar" id="infoBar">
+            <div class="info-item"><span class="info-label">原始数据:</span><span class="info-value" id="infoRaw">-</span></div>
+            <div class="info-item"><span class="info-label">数据粒度:</span><span class="info-value" id="infoInterval">-</span></div>
+            <div class="info-item"><span class="info-label">聚合天数:</span><span class="info-value" id="infoDays">-</span></div>
+        </div>
+        
         <div class="header">
             <h1 id="reportTitle">回测报告</h1>
             <p id="dateRange">-</p>
@@ -60,491 +67,438 @@
         
         <div class="metrics" id="metricsGrid"></div>
         
-        <!-- 价格与累计收益率对照图 -->
+        <!-- 价格与累计收益率 -->
         <div class="chart-section">
-            <h3 class="chart-title">价格走势与累计收益率对照</h3>
-            <div class="chart-wrapper">
-                <canvas id="priceAndReturnChart"></canvas>
-            </div>
+            <h3 class="chart-title">价格走势与累计收益率</h3>
+            <div class="chart-wrapper"><canvas id="chartPrice"></canvas></div>
             <div class="chart-legend">
-                <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>ETH 价格 (USD)</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>累计收益率 (%)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>每日收盘价 (USD)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>累计收益 (USDT)</div>
             </div>
         </div>
         
-        <!-- 日收益率和日收益金额合并图 -->
+        <!-- 日收益率 -->
         <div class="chart-grid">
             <div class="chart-section">
-                <h3 class="chart-title">日收益率与收益金额</h3>
-                <div class="chart-wrapper">
-                    <canvas id="dailyReturnAmountChart"></canvas>
-                </div>
+                <h3 class="chart-title">日收益率与日收益金额</h3>
+                <div class="chart-wrapper"><canvas id="chartDaily"></canvas></div>
                 <div class="chart-legend">
                     <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>日收益率 (%)</div>
-                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>日收益金额 (USDT)</div>
+                    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>日收益 (USDT)</div>
                 </div>
             </div>
             
             <div class="chart-section">
-                <h3 class="chart-title">日收益率分布</h3>
-                <div class="chart-wrapper">
-                    <canvas id="returnDistChart"></canvas>
-                </div>
+                <h3 class="chart-title">收益率分布</h3>
+                <div class="chart-wrapper"><canvas id="chartDist"></canvas></div>
             </div>
         </div>
-        
-        <div class="data-info">
-            <span>数据源: <span id="dataSource">Gate.io 历史数据</span></span>
-            <span>更新时间: <span id="updateTime">-</span></span>
-            <span>数据点数: <span id="dataPoints">-</span></span>
+
+        <!-- 买卖密度图 -->
+        <div class="chart-section">
+            <h3 class="chart-title">每日买卖密度</h3>
+            <div class="chart-wrapper"><canvas id="chartVolume"></canvas></div>
+            <div class="chart-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>卖出量 (代币数)</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>买入量 (代币数)</div>
+            </div>
         </div>
     </div>
 
     <script>
-        // 全局变量
-        let backtestData = null;
-        let priceChart = null;
-        let dailyChart = null;
-        let distChart = null;
+    (function() {
+        'use strict';
         
-        // =============================================
-        // 文件选择器初始化
-        // =============================================
-        function initFileSelector() {
-            const fileInput = document.getElementById('jsonFile');
-            
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    loadJsonFromFile(file);
+        // ========== 全局变量 ==========
+        let chartPrice = null;
+        let chartDaily = null;
+        let chartDist = null;
+        let chartVolume = null;
+        
+        // ========== 工具函数 ==========
+        function parseTime(str) {
+            return new Date(str.replace('+00:00', 'Z').replace('+08:00', '+08:00'));
+        }
+        
+        function formatDate(d) {
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+        
+        function formatPct(val) {
+            return (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+        }
+        
+        // ========== 数据处理 ==========
+        function aggregateToDaily(equity) {
+            const daily = {};
+            for (let i = 0; i < equity.length; i++) {
+                const t = parseTime(equity[i].time);
+                const date = formatDate(t);
+                daily[date] = {
+                    time: date,
+                    price: equity[i].price,
+                    position: equity[i].position || 0,
+                    fund: equity[i].fund || equity[i].price,
+                    index: i  // 保留原始索引
+                };
+            }
+            const result = Object.values(daily).sort((a, b) => a.time.localeCompare(b.time));
+            return result;
+        }
+        
+        // 检测并修复 fund 跳变（处理并行回测导致的数据不连续问题）
+        function fixFundJumps(daily) {
+            if (daily.length < 2) return daily;
+
+            const fixed = daily.map(d => ({...d}));
+            const jumpThreshold = 0.3; // 30% 的跳变阈值
+
+            // 检测跳变点并修复（每次跳变只应用一次调整）
+            for (let i = 1; i < fixed.length; i++) {
+                const currMonth = fixed[i].time.substring(0, 7);
+                const prevMonth = fixed[i-1].time.substring(0, 7);
+
+                // 只在月份变化时检测跳变
+                if (currMonth !== prevMonth) {
+                    const prevFund = fixed[i-1].fund;
+                    const currFund = fixed[i].fund;
+                    const changeRatio = currFund / prevFund;
+
+                    // 如果变化超过阈值，认为是资金重置
+                    if (Math.abs(1 - changeRatio) > jumpThreshold) {
+                        const adjustment = prevFund - currFund;
+                        console.log(`[FIX] ${fixed[i].time}: fund ${currFund.toFixed(2)} -> ${prevFund.toFixed(2)} (调整: ${adjustment.toFixed(2)}, 月份: ${prevMonth} -> ${currMonth})`);
+
+                        // 将调整量应用到该月及之后的所有数据
+                        for (let j = i; j < fixed.length; j++) {
+                            fixed[j].fund += adjustment;
+                        }
+                    }
                 }
-            });
-            
-            // 拖拽支持
-            const dropZone = document.querySelector('.file-selector');
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.style.borderColor = '#60a5fa';
-            });
-            dropZone.addEventListener('dragleave', () => {
-                dropZone.style.borderColor = '#334155';
-            });
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.style.borderColor = '#334155';
-                const file = e.dataTransfer.files[0];
-                if (file && file.name.endsWith('.json')) {
-                    loadJsonFromFile(file);
-                }
-            });
+            }
+
+            return fixed;
         }
         
-        // =============================================
-        // 从文件加载JSON
-        // =============================================
-        function loadJsonFromFile(file) {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('content').style.display = 'none';
-            document.getElementById('currentFile').innerHTML = `当前: <strong>${file.name}</strong>`;
+        function computeStats(daily, leverage, investment) {
+            // 先修复 fund 跳变
+            const fixedDaily = fixFundJumps(daily);
             
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    backtestData = JSON.parse(e.target.result);
-                    init();
-                } catch (err) {
-                    document.getElementById('loading').innerHTML = `
-                        <div class="error-box">
-                            JSON 解析失败: ${err.message}<br>
-                            <small>请确认文件是正确的回测结果格式</small>
-                        </div>
-                    `;
-                }
-            };
-            reader.onerror = () => {
-                document.getElementById('loading').innerHTML = `
-                    <div class="error-box">
-                        文件读取失败<br>
-                        <small>请重试或选择其他文件</small>
-                    </div>
-                `;
-            };
-            reader.readAsText(file);
+            // 使用 fund 字段计算收益
+            const initialFund = fixedDaily[0].fund;
+            const stats = { returns: [], cumReturns: [], cumAmounts: [], dailyAmounts: [], dates: [] };
+            
+            for (let i = 1; i < fixedDaily.length; i++) {
+                const prevFund = fixedDaily[i-1].fund;
+                const currFund = fixedDaily[i].fund;
+                
+                // 日收益率
+                const ret = ((currFund - prevFund) / prevFund) * 100;
+                // 累计收益率
+                const cumRet = ((currFund - initialFund) / initialFund) * 100;
+                // 日收益金额
+                const dailyAmount = currFund - prevFund;
+                // 累计收益金额
+                const cumAmount = currFund - initialFund;
+                
+                stats.returns.push(ret);
+                stats.cumReturns.push(cumRet);
+                stats.cumAmounts.push(cumAmount);
+                stats.dailyAmounts.push(dailyAmount);
+                stats.dates.push(fixedDaily[i].time);
+            }
+            return stats;
         }
         
-        // =============================================
-        // 初始化
-        // =============================================
-        function init() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
-            
-            const equity = backtestData.data_series.equity;
-            const params = backtestData.backtest_params;
-            const metrics = backtestData.key_metrics;
-            
-            // 更新头部信息
-            const direction = params.direction || '做空';
-            document.getElementById('reportTitle').textContent = 
-                `${params.market} ${params.leverage}x ${direction} 回测报告`;
-            document.getElementById('dateRange').textContent = 
-                `${params.backtest_from} 至 ${params.backtest_to} | ${params.interval}`;
-            document.getElementById('updateTime').textContent = new Date().toLocaleString('zh-CN');
-            document.getElementById('dataPoints').textContent = equity.length;
-            document.getElementById('dataSource').textContent = 
-                params.data_source === 'gate_history' ? 'Gate.io 历史数据' : params.data_source;
-            
-            // 销毁旧图表
-            destroyCharts();
-            
-            // 渲染指标卡片
-            renderMetrics(metrics);
-            
-            // 创建图表
-            createPriceAndReturnChart(equity);
-            createDailyReturnAmountChart(equity);
-            createReturnDistChart(equity);
-        }
-        
-        function destroyCharts() {
-            if (priceChart) { priceChart.destroy(); priceChart = null; }
-            if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
-            if (distChart) { distChart.destroy(); distChart = null; }
-        }
-        
-        // =============================================
-        // 渲染指标卡片
-        // =============================================
+        // ========== 图表渲染 ==========
         function renderMetrics(metrics) {
-            const container = document.getElementById('metricsGrid');
             const items = [
-                { label: '总收益率', value: formatPct(metrics.total_return_pct), 
-                  isNegative: metrics.total_return_pct < 0 },
-                { label: '年化收益率', value: formatPct(metrics.annual_return_pct),
-                  isNegative: metrics.annual_return_pct < 0 },
-                { label: '最大回撤', value: formatPct(metrics.max_drawdown_pct),
-                  isNegative: true },
-                { label: '夏普比率', value: metrics.sharpe_ratio.toFixed(2),
-                  isNegative: metrics.sharpe_ratio < 0 },
+                { label: '总收益率', value: formatPct(metrics.total_return_pct), neg: metrics.total_return_pct < 0 },
+                { label: '年化收益率', value: formatPct(metrics.annual_return_pct), neg: metrics.annual_return_pct < 0 },
+                { label: '最大回撤', value: formatPct(metrics.max_drawdown_pct), neg: true },
+                { label: '夏普比率', value: metrics.sharpe_ratio.toFixed(2), neg: metrics.sharpe_ratio < 0 },
                 { label: '波动率', value: formatPct(metrics.volatility_pct) },
                 { label: '胜率', value: formatPct(metrics.win_rate_pct) },
                 { label: '初始价格', value: '$' + (metrics.initial_price || 0).toFixed(2) },
                 { label: '最终价格', value: '$' + (metrics.final_price || 0).toFixed(2) }
             ];
             
-            container.innerHTML = items.map(item => `
-                <div class="metric-card">
-                    <div class="metric-value ${item.isNegative ? 'negative' : ''}">${item.value}</div>
-                    <div class="metric-label">${item.label}</div>
-                </div>
-            `).join('');
+            document.getElementById('metricsGrid').innerHTML = items.map(item => 
+                '<div class="metric-card"><div class="metric-value' + (item.neg ? ' negative' : '') + '">' + 
+                item.value + '</div><div class="metric-label">' + item.label + '</div></div>'
+            ).join('');
         }
         
-        function formatPct(val) {
-            const sign = val >= 0 ? '+' : '';
-            return sign + val.toFixed(2) + '%';
-        }
-        
-        // =============================================
-        // 图表1: 价格与累计收益率对照
-        // =============================================
-        function createPriceAndReturnChart(equity) {
-            const ctx = document.getElementById('priceAndReturnChart').getContext('2d');
+        function renderChartPrice(ctx, daily, stats) {
+            const labels = daily.slice(1).map(d => d.time.substring(0, 7));
+            const prices = daily.slice(1).map(d => d.price);
+            const cumAmounts = stats.cumAmounts;  // 累计收益金额
             
-            const cumulativeReturns = [];
-            let runningReturn = 0;
-            
-            equity.forEach((item, i) => {
-                if (i === 0) {
-                    cumulativeReturns.push(0);
-                } else {
-                    const dailyReturn = ((item.price - equity[i-1].price) / equity[i-1].price) * 100;
-                    runningReturn += dailyReturn;
-                    cumulativeReturns.push(runningReturn);
-                }
-            });
-            
-            const labels = equity.map((d, i) => i);
-            const priceData = equity.map(d => d.price);
-            
-            priceChart = new Chart(ctx, {
+            if (chartPrice) chartPrice.destroy();
+            chartPrice = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
-                        {
-                            label: 'ETH价格',
-                            data: priceData,
-                            borderColor: '#2563eb',
-                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.1,
-                            pointRadius: 0,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: '累计收益率',
-                            data: cumulativeReturns,
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.1,
-                            pointRadius: 0,
-                            yAxisID: 'y1'
-                        }
+                        { label: '价格', data: prices, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)',
+                          borderWidth: 1.5, fill: true, tension: 0.1, pointRadius: 0, yAxisID: 'y' },
+                        { label: '累计收益', data: cumAmounts, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+                          borderWidth: 1.5, fill: true, tension: 0.1, pointRadius: 0, yAxisID: 'y1' }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false, animation: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                            titleColor: '#f8fafc',
-                            bodyColor: '#cbd5e1',
-                            borderColor: '#334155',
-                            borderWidth: 1,
-                            callbacks: {
-                                title: ctx => equity[ctx[0].dataIndex] ? equity[ctx[0].dataIndex].time.substring(0, 10) : '',
-                                label: ctx => {
-                                    if (ctx.datasetIndex === 0) {
-                                        return `ETH价格: $${ctx.raw.toFixed(2)}`;
-                                    } else {
-                                        return `累计收益: ${ctx.raw.toFixed(2)}%`;
-                                    }
-                                }
-                            }
-                        }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: {
-                            ticks: { 
-                                color: '#64748b',
-                                maxTicksLimit: 12,
-                                callback: v => equity[v] ? equity[v].time.substring(0, 7) : ''
-                            },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            title: { display: true, text: 'ETH价格 (USD)', color: '#2563eb' },
-                            ticks: { color: '#64748b', callback: v => '$' + v.toFixed(0) },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
-                            title: { display: true, text: '累计收益率 (%)', color: '#10b981' },
-                            ticks: { color: '#64748b', callback: v => v.toFixed(0) + '%' },
-                            grid: { drawOnChartArea: false }
-                        }
+                        x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { type: 'linear', position: 'left', title: { text: '价格 (USD)', color: '#2563eb' },
+                             ticks: { color: '#64748b', callback: v => '$' + v.toFixed(0) },
+                             grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y1: { type: 'linear', position: 'right', title: { text: '累计收益 (USDT)', color: '#10b981' },
+                              ticks: { color: '#64748b', callback: v => '$' + v.toFixed(2) },
+                              grid: { drawOnChartArea: false } }
                     }
                 }
             });
         }
         
-        // =============================================
-        // 图表2: 日收益率和日收益金额合并
-        // =============================================
-        function createDailyReturnAmountChart(equity) {
-            const ctx = document.getElementById('dailyReturnAmountChart').getContext('2d');
+        function renderChartDaily(ctx, stats) {
+            const returns = stats.returns;
+            const dailyAmounts = stats.dailyAmounts;
+            const labels = stats.dates.map(d => d.substring(0, 7));
             
-            const investment = backtestData.backtest_params.investment;
-            const leverage = backtestData.backtest_params.leverage;
+            const bgColors = returns.map(r => r >= 0 ? 'rgba(139,92,246,0.6)' : 'rgba(139,92,246,0.3)');
+            const borderColors = returns.map(r => r >= 0 ? '#8b5cf6' : '#6d28d9');
             
-            const dailyReturns = [];
-            const dailyAmounts = [];
+            if (chartDaily) chartDaily.destroy();
+            chartDaily = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '收益率', data: returns, backgroundColor: bgColors, borderColor: borderColors, borderWidth: 1, yAxisID: 'y' },
+                        { type: 'line', label: '日收益', data: dailyAmounts, borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, tension: 0.2, yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { display: false } },
+                        y: { type: 'linear', position: 'left', title: { text: '收益率 (%)', color: '#8b5cf6' },
+                             ticks: { color: '#64748b', callback: v => v.toFixed(0) + '%' },
+                             grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y1: { type: 'linear', position: 'right', title: { text: '日收益 (USDT)', color: '#f59e0b' },
+                              ticks: { color: '#64748b', callback: v => '$' + v.toFixed(2) },
+                              grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+        
+        function renderChartDist(ctx, stats) {
+            const returns = stats.returns;
+            if (returns.length === 0) return;
+            
+            const binCount = 25;
+            let min = Math.min(...returns), max = Math.max(...returns);
+            if (min === max) { min -= 1; max += 1; }
+            
+            const binSize = (max - min) / binCount;
+            const bins = new Array(binCount).fill(0);
             const labels = [];
             
-            for (let i = 1; i < equity.length; i++) {
-                const prevPrice = equity[i-1].price;
-                const currentPrice = equity[i].price;
-                
-                const dailyReturn = ((currentPrice - prevPrice) / prevPrice) * leverage;
-                dailyReturns.push(dailyReturn);
-                dailyAmounts.push(investment * (dailyReturn / 100));
-                labels.push(i);
+            for (let i = 0; i < binCount; i++) {
+                labels.push((min + i * binSize).toFixed(1) + '%');
             }
             
-            dailyChart = new Chart(ctx, {
+            for (const r of returns) {
+                let idx = Math.floor((r - min) / binSize);
+                idx = Math.max(0, Math.min(binCount - 1, idx));
+                bins[idx]++;
+            }
+            
+            const colors = labels.map((_, i) => {
+                const val = min + i * binSize;
+                if (val < -5) return 'rgba(239,68,68,0.8)';
+                if (val < 0) return 'rgba(249,115,22,0.7)';
+                if (val < 5) return 'rgba(34,197,94,0.7)';
+                return 'rgba(16,185,129,0.8)';
+            });
+            
+            if (chartDist) chartDist.destroy();
+            chartDist = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: labels, datasets: [{ label: '天数', data: Array.from(bins), backgroundColor: colors, borderWidth: 1 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', maxRotation: 45, callback: (v, i) => i % 5 === 0 ? labels[i] : '' }, grid: { display: false } },
+                        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
+
+        function renderChartVolume(ctx, data) {
+            if (!data || data.length === 0) {
+                // 如果没有交易数据，显示提示
+                console.log('[CHART] 无交易量数据');
+                return;
+            }
+
+            // 过滤有交易的天数（买卖量都为0的跳过）
+            const hasVolume = data.filter(d => d.buy_volume > 0 || d.sell_volume > 0);
+            
+            if (hasVolume.length === 0) {
+                console.log('[CHART] 所有日期买卖量都为0');
+                return;
+            }
+            
+            // 为了可读性，对数量进行缩放
+            const maxVol = Math.max(...hasVolume.map(d => Math.max(d.buy_volume, d.sell_volume)));
+            const scale = maxVol > 1000 ? 1000 : maxVol > 100 ? 100 : 1;
+            const unit = scale === 1000 ? 'K' : scale === 100 ? '百' : '';
+            
+            const labels = data.map(d => d.date);
+            const buyData = data.map(d => d.buy_volume / scale);
+            const sellData = data.map(d => d.sell_volume / scale);
+            
+            if (chartVolume) chartVolume.destroy();
+            chartVolume = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [
                         {
-                            label: '日收益率',
-                            data: dailyReturns,
-                            backgroundColor: dailyReturns.map(r => 
-                                r >= 0 ? 'rgba(139, 92, 246, 0.6)' : 'rgba(139, 92, 246, 0.3)'
-                            ),
-                            borderColor: dailyReturns.map(r =>
-                                r >= 0 ? '#8b5cf6' : '#6d28d9'
-                            ),
-                            borderWidth: 1,
-                            yAxisID: 'y'
+                            label: '卖出量',
+                            data: sellData,
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                            borderColor: '#ef4444',
+                            borderWidth: 1
                         },
                         {
-                            type: 'line',
-                            label: '收益金额',
-                            data: dailyAmounts,
-                            borderColor: '#f59e0b',
-                            backgroundColor: 'transparent',
-                            borderWidth: 1.5,
-                            pointRadius: 0,
-                            tension: 0.2,
-                            yAxisID: 'y1'
+                            label: '买入量',
+                            data: buyData,
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            borderColor: '#22c55e',
+                            borderWidth: 1
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    animation: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
                             callbacks: {
-                                title: ctx => equity[ctx[0].dataIndex + 1] ? equity[ctx[0].dataIndex + 1].time.substring(0, 10) : '',
-                                label: ctx => {
-                                    if (ctx.datasetIndex === 0) {
-                                        return `日收益率: ${ctx.raw.toFixed(2)}%`;
-                                    } else {
-                                        return `收益金额: $${ctx.raw.toFixed(2)}`;
-                                    }
+                                label: function(context) {
+                                    const vol = context.raw * scale;
+                                    return context.dataset.label + ': ' + vol.toFixed(4) + (unit ? ' ' + unit : '');
                                 }
                             }
                         }
                     },
                     scales: {
                         x: {
-                            ticks: { 
-                                color: '#64748b',
-                                maxTicksLimit: 10,
-                                callback: v => {
-                                    const idx = Math.floor(v);
-                                    if (idx > 0 && idx < equity.length) {
-                                        return equity[idx + 1] ? equity[idx + 1].time.substring(0, 7) : '';
-                                    }
-                                    return '';
-                                }
-                            },
-                            grid: { display: false }
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            title: { display: true, text: '收益率 (%)', color: '#8b5cf6' },
-                            ticks: { color: '#64748b', callback: v => v.toFixed(0) + '%' },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        y1: {
-                            type: 'linear',
-                            position: 'right',
-                            title: { display: true, text: '金额 (USDT)', color: '#f59e0b' },
-                            ticks: { color: '#64748b', callback: v => '$' + v.toFixed(0) },
-                            grid: { drawOnChartArea: false }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // =============================================
-        // 图表3: 收益率分布直方图
-        // =============================================
-        function createReturnDistChart(equity) {
-            const ctx = document.getElementById('returnDistChart').getContext('2d');
-            
-            const leverage = backtestData.backtest_params.leverage;
-            
-            const returns = [];
-            for (let i = 1; i < equity.length; i++) {
-                const dailyReturn = ((equity[i].price - equity[i-1].price) / equity[i-1].price) * leverage;
-                returns.push(dailyReturn);
-            }
-            
-            const binCount = 25;
-            const minReturn = Math.min(...returns);
-            const maxReturn = Math.max(...returns);
-            const binSize = (maxReturn - minReturn) / binCount;
-            
-            const bins = new Array(binCount).fill(0);
-            const binLabels = [];
-            
-            for (let i = 0; i < binCount; i++) {
-                const start = minReturn + i * binSize;
-                binLabels.push(`${start.toFixed(1)}%`);
-            }
-            
-            returns.forEach(r => {
-                const idx = Math.min(Math.floor((r - minReturn) / binSize), binCount - 1);
-                bins[idx]++;
-            });
-            
-            const colors = binLabels.map(label => {
-                const val = parseFloat(label);
-                if (val < -5) return 'rgba(239, 68, 68, 0.8)';
-                if (val < 0) return 'rgba(249, 115, 22, 0.7)';
-                if (val < 5) return 'rgba(34, 197, 94, 0.7)';
-                return 'rgba(16, 185, 129, 0.8)';
-            });
-            
-            distChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: binLabels,
-                    datasets: [{
-                        label: '天数',
-                        data: bins,
-                        backgroundColor: colors,
-                        borderColor: colors.map(c => c.replace(/0\.\d+/, '1')),
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                            callbacks: {
-                                title: ctx => `收益率: ${ctx[0].label}%`,
-                                label: ctx => `天数: ${ctx.raw}`
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { 
-                                color: '#64748b',
-                                maxRotation: 45,
-                                callback: (v, idx) => {
-                                    if (idx % 5 === 0) return binLabels[idx];
-                                    return '';
-                                }
-                            },
-                            grid: { display: false }
+                            ticks: { color: '#64748b', maxTicksLimit: 15 },
+                            grid: { display: false },
+                            stacked: false
                         },
                         y: {
                             ticks: { color: '#64748b' },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            title: {
+                                display: true,
+                                text: unit ? '代币数量 (' + unit + ')' : '代币数量',
+                                color: '#94a3b8'
+                            }
                         }
                     }
                 }
             });
         }
         
-        // =============================================
-        // 启动
-        // =============================================
-        window.addEventListener('DOMContentLoaded', initFileSelector);
+        // ========== 初始化 ==========
+        function init() {
+            const data = window.backtestData;
+            const equity = data.data_series.equity;
+            const params = data.backtest_params;
+            const metrics = data.key_metrics;
+            
+            // 更新信息栏
+            document.getElementById('infoRaw').textContent = equity.length.toLocaleString() + ' 条';
+            document.getElementById('infoInterval').textContent = params.interval;
+            
+            // 聚合日度数据
+            const daily = aggregateToDaily(equity);
+            document.getElementById('infoDays').textContent = daily.length + ' 天';
+            
+            // 计算统计数据
+            const stats = computeStats(daily, params.leverage, params.investment);
+            
+            // 更新标题
+            document.getElementById('reportTitle').textContent = 
+                params.market + ' ' + params.leverage + 'x ' + (params.direction || '做空') + ' 回测报告';
+            document.getElementById('dateRange').textContent = 
+                params.backtest_from + ' 至 ' + params.backtest_to;
+            
+            // 渲染
+            renderMetrics(metrics);
+            renderChartPrice(document.getElementById('chartPrice').getContext('2d'), daily, stats);
+            renderChartDaily(document.getElementById('chartDaily').getContext('2d'), stats);
+            renderChartDist(document.getElementById('chartDist').getContext('2d'), stats);
+            renderChartVolume(document.getElementById('chartVolume').getContext('2d'), data.data_series.trade_volume);
+        }
+        
+        // ========== 文件加载 ==========
+        function loadFile(file) {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('content').style.display = 'none';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    window.backtestData = JSON.parse(e.target.result);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('content').style.display = 'block';
+                    init();
+                } catch(err) {
+                    document.getElementById('loading').innerHTML = 
+                        '<div class="error-box">JSON解析失败: ' + err.message + '</div>';
+                }
+            };
+            reader.onerror = function() {
+                document.getElementById('loading').innerHTML = 
+                    '<div class="error-box">文件读取失败</div>';
+            };
+            reader.readAsText(file);
+        }
+        
+        // ========== 事件绑定 ==========
+        document.getElementById('jsonFile').addEventListener('change', function(e) {
+            if (e.target.files[0]) loadFile(e.target.files[0]);
+        });
+        
+        const dropZone = document.querySelector('.file-selector');
+        dropZone.addEventListener('dragover', function(e) { e.preventDefault(); this.style.borderColor = '#60a5fa'; });
+        dropZone.addEventListener('dragleave', function() { this.style.borderColor = '#334155'; });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.style.borderColor = '#334155';
+            if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+        });
+        
+    })();
     </script>
 </body>
 </html>
